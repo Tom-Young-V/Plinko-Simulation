@@ -1,6 +1,7 @@
 
-binWidth = 20
+binWidth = 15
 binHeight = 15
+
 
 class Bin:
     def __init__(self, position, color):
