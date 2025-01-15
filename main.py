@@ -1,7 +1,7 @@
 from sys import exit
 import pygame
 import random
-from math import floor, dist
+from math import floor
 
 pygame.init()
 
@@ -14,20 +14,19 @@ clock = pygame.time.Clock()
 fontName = "Plinko"
 font = pygame.font.SysFont(fontName, 40)
 
-binWidth = 40
+binWidth = 48
 binHeight = 25
 corner_radius = 5
-spacing = 10
+spacing = 1
 numBins = 20
 
 pegRadius = 5
 pegSpacingX = 50
 pegSpacingY = 30
 
-ballRadius = 5
+ballRadius = 8
 
 smallFont = pygame.font.SysFont(fontName, 20)
-
 
 class MoneyBox:
     def __init__(self):
@@ -35,19 +34,10 @@ class MoneyBox:
         self.rect = pygame.Rect(0, 0, 300, 200)
     
     def draw(self):
-        if self.amount > 0:
-            color = "Green"
-        else:
-            color = "Red"
-
         moneyText = f"Money: $ {self.amount:.2f}"
-        
-        moneyBoxSurf = smallFont.render(moneyText, True, color)
-
+        moneyBoxSurf = smallFont.render(moneyText, True, "Green")
         text_rect = moneyBoxSurf.get_rect(center=self.rect.center)
         screen.blit(moneyBoxSurf, text_rect)
-    
-
 
 class Bin:
     def __init__(self, position, color, multiplier):
@@ -73,62 +63,97 @@ class Bin:
             color = self.color
             textColor = (255, 255, 255)
         pygame.draw.rect(screen, color, self.rect, border_radius=corner_radius)
-     
-        if self.multiplier:  
-            multiplierText = f"x{self.multiplier}"
-        else:
-            multiplierText = f"x{self.multiplier}"
         
+        multiplierText = f"x{self.multiplier}"
         multiplier_surface = smallFont.render(multiplierText, True, textColor)
         text_rect = multiplier_surface.get_rect(center=self.rect.center)
         screen.blit(multiplier_surface, text_rect)
 
 class Peg:
     def __init__(self, position, color):
-        self.position = position
+        self.position = pygame.Vector2(position)
         self.color = color
-        self.animateFrames = 0
-        self.animateColor = "White"
-
-    
-    def animate(self):
-        self.animateFrames = 5
-
-    def update(self):
-        if self.animateFrames:
-            self.animateFrames -= 1
 
     def draw(self):
-        if self.animateFrames:
-            color = self.animateColor
-        else:
-            color = self.color
-        pygame.draw.circle(screen, color, self.position, pegRadius)
+        pygame.draw.circle(screen, self.color, self.position, pegRadius)
+
 
 class Ball:
     def __init__(self, position):
-        self.position = position
+        # 1. Initialize the ball's position using a 2D vector based on the input position.
+        self.position = pygame.Vector2(position)
+
+        # 2. Set the ball's color to a random RGB value with higher brightness (values between 128 and 255).
         self.color = (random.randint(128, 255), random.randint(128, 255), random.randint(128, 255))
-        self.velocity = (random.randint(-3, 3), 0)
-        self.acceleration = -9.8
-        self.gravity = 0.075
-        self.landedBin = None
+
+        # 3. Initialize the ball's velocity as a vector with a random horizontal speed (-2 to 2) and no vertical speed.
+        self.velocity = pygame.Vector2(random.uniform(-2, 2), 0)
+
+        # 4. Define the gravity factor that affects the ball's vertical acceleration.
+        self.gravity = 0.1
+
+        # 5. Define the damping factor that reduces velocity upon collision for realistic bounces.
+        self.damping = 0.6
+
+        # 6. Set the value property of the ball, possibly representing a score or type.
         self.value = 1
 
     def update(self):
-        self.velocity = (self.velocity[0], self.velocity[1] + 9.8 * self.gravity)
-        self.position = (self.position[0] + self.velocity[0], self.position[1] + self.velocity[1])
+        # 7. Apply gravity to the ball's vertical velocity.
+        self.velocity.y += 9.8 * self.gravity
 
-        return self.position[1] > 710
-            
-        
+        # 8. Update the ball's position based on its velocity.
+        self.position += self.velocity
+
+        # 9. Check for collisions with pegs on the board.
+        for peg in board.pegs:
+            # 10. Calculate the distance between the ball and the current peg.
+            distance = self.position.distance_to(peg.position)
+            if distance < ballRadius + pegRadius:  # If they are overlapping:
+                # 11. Calculate how much they overlap.
+                overlap = ballRadius + pegRadius - distance
+
+                # 12. Compute the normal vector for collision resolution.
+                normal = (self.position - peg.position).normalize()
+
+                # 13. Resolve overlap by moving the ball outward along the collision normal.
+                self.position += normal * overlap
+
+                # 14. Reflect the ball's velocity across the normal and apply damping to reduce its speed.
+                self.velocity = self.velocity.reflect(normal) * self.damping
+
+        # 15. Define triangular boundaries of the screen and check collisions with them.
+        left_x = screenLength / 2 - pegSpacingX * 10
+        right_x = screenLength / 2 + pegSpacingX * 10
+        top_y = 100
+
+        # 16. Check for collision with the left or right boundary.
+        if self.position.x - ballRadius < left_x or self.position.x + ballRadius > right_x:
+            # 17. Reverse horizontal velocity and apply damping.
+            self.velocity.x = -self.velocity.x * self.damping
+
+            # 18. Keep the ball inside the boundaries.
+            self.position.x = max(left_x + ballRadius, min(self.position.x, right_x - ballRadius))
+
+        # 19. Check for collision with the top boundary.
+        if self.position.y - ballRadius < top_y:
+            # 20. Reverse vertical velocity and apply damping.
+            self.velocity.y = -self.velocity.y * self.damping
+
+            # 21. Keep the ball below the top boundary.
+            self.position.y = top_y + ballRadius
+
+        # 22. Return True if the ball falls off the screen (below y=710).
+        return self.position.y > 710
+
     def draw(self):
-        pygame.draw.circle(screen, self.color, self.position, ballRadius)
+        # 23. Draw the ball as a circle on the screen with its color and position.
+        pygame.draw.circle(screen, self.color, (int(self.position.x), int(self.position.y)), ballRadius)
 
 class ClickableArea:
     def __init__(self):
-        self.size = (100, 50)
-        self.position = (screenLength / 2 - self.size[0] // 2, 50)
+        self.size = (30, 30)
+        self.position = (screenLength / 2 - self.size[0] // 2, 90)
         self.color = (70, 74, 74)
         self.rect = pygame.Rect(self.position[0], self.position[1], self.size[0], self.size[1])
 
@@ -136,7 +161,7 @@ class ClickableArea:
         return self.rect.collidepoint(pygame.mouse.get_pos())
 
     def draw(self):
-        pygame.draw.rect(screen, self.color, self.rect, border_radius = corner_radius)
+        pygame.draw.rect(screen, self.color, self.rect, border_radius=corner_radius)
 
 class Board:
     def __init__(self):
@@ -146,27 +171,21 @@ class Board:
         self.money = 0
         self.clickableArea = ClickableArea()
         self.moneyBox = MoneyBox()
-    
 
     def createBins(self):
         self.bins = []
         yPosition = 710
 
         for x in range(numBins):
-           
             distCenter = floor(abs(x - (numBins - 1) / 2))
             gradientRatio = distCenter / ((numBins - 1) / 2)
             red = int(255 * gradientRatio)
             yellow = int(255 * (1 - gradientRatio))
             color = (red, yellow, 0)
 
-            distCenterDict = {0: 0.3, 1: 0.5, 2: 1, 3: 2, 4: 5, 5: 10, 6: 50, 7: 250, 8: 1000, 9: 10000}
+            distCenterDict = {0: 0.3, 1: 0.5, 2: 1, 3: 2, 4: 5, 5: 10, 6: 25, 7: 50, 8: 100, 9: 1000}
+            multiplier = distCenterDict.get(distCenter, 10000)
 
-            if distCenter in distCenterDict:
-                multiplier = distCenterDict[distCenter]
-            else:
-                multiplier = 10000
-            
             bin_x_position = (
                 screenLength / 2
                 - spacing * numBins / 2
@@ -174,10 +193,10 @@ class Board:
                 + (spacing + binWidth) * x + spacing / 2
             )
             self.bins.append(Bin((bin_x_position, yPosition), color, multiplier))
-    
+
     def createPegs(self):
         self.pegs = []
-            
+        
         for y in range(20):
             for x in range(y + 1):
                 if not y:
@@ -195,7 +214,8 @@ class Board:
     def addBall(self, position):
         if self.clickableArea.intersectMouse():
             self.balls.append(Ball(pygame.mouse.get_pos()))
-            self.moneyBox.amount -= 1
+
+        self.moneyBox.amount -= 1
 
     def draw(self):
         self.clickableArea.draw()
@@ -206,28 +226,16 @@ class Board:
             bin.draw()
 
         for peg in self.pegs:
-            peg.update()
             peg.draw()
 
-        for _, ball in enumerate(self.balls):
+        for ball in self.balls[:]:
             if ball.update():
                 for bin in self.bins:
-                    if ball.position[0] + ballRadius >= bin.position[0] and ball.position[0] - ballRadius <= bin.position[0] + binWidth:
-
+                    if bin.rect.collidepoint(ball.position):
                         self.moneyBox.amount += ball.value * bin.multiplier
-
                         bin.animate()
-
                         self.balls.remove(ball)
-
                         break
-
-            else:
-                for peg in self.pegs:
-                    if dist(peg.position, ball.position) <= pegRadius + ballRadius:
-                        # handle collisions:
-
-                        peg.animate()
 
             ball.draw()
 
@@ -249,6 +257,6 @@ while True:
 
     screen.fill((0, 0, 0)) 
     board.draw()
-    
+
     pygame.display.update()
     clock.tick(60)
